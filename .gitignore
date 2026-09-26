@@ -1,0 +1,43 @@
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.ipynb_checkpoints/
+
+# Packaging outputs and generated metadata
+/build/
+/dist/
+*.egg-info/
+/pyBoxshade.spec
+
+# Local previews, exports, logs, backups and verification records
+/artifacts/
+/升级验证.md
+.coverage
+.coverage.*
+/htmlcov/
+/coverage.xml
+*.log
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Editor and operating-system temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

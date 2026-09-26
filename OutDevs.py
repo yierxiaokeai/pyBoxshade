@@ -1,11 +1,12 @@
-#!/usr/bin/env python
-
 import numpy as np
 import BS_config as BS
 from platform import system
 
 import datetime
-from PyQt5.QtCore import (QFile, Qt, QFileInfo, QTextStream, QDir, QSettings,QRectF)
+from pyboxshade.resources import resource_path
+from PyQt5.QtCore import (QFile, QSaveFile, Qt, QFileInfo, QTextStream, QDir, QRectF)
+from pyboxshade.settings import new_settings as QSettings
+from pyboxshade.errors import qt_file_error, FileOperationError
 from PyQt5.QtGui import QColor,QPalette, QPixmap, QFont, QPainter, QPen, QIcon
 from PyQt5.QtWidgets import (QAction, QFileDialog, QLabel, QMessageBox, QApplication, QStyleFactory,
                              QScrollArea, QSizePolicy, QVBoxLayout, QWidget, QToolBar)
@@ -41,11 +42,15 @@ class Filedev():
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         TDialog = QFileDialog()
-        fileName, _ = TDialog.getSaveFileName(self.parent,"Save file as:", BS.lastdir, self.file_filter, options=options)
+        fileName = getattr(self, 'output_path', '')
+        if not fileName:
+            fileName, _ = TDialog.getSaveFileName(self.parent,"Save file as:", BS.lastdir, self.file_filter, options=options)
         if fileName:
-            self.file = QFile(fileName)
+            self.file = QSaveFile(fileName)
             BS.lastdir = QFileInfo(fileName).absolutePath()
             if not self.file.open(QFile.WriteOnly | QFile.Text):  # open to write
+                if getattr(self, 'output_path', ''):
+                    raise qt_file_error(self.file, 'open')
                 mb = QMessageBox()
                 mb.setTextFormat(Qt.RichText)
                 mb.setText("<p style='font-size: 18pt'>Open File error</p>"
@@ -56,6 +61,7 @@ class Filedev():
                 return False
             else:
                 self.outstream = QTextStream(self.file)
+                self.outstream.setCodec("UTF-8")
                 return True
         else:
             return False
@@ -71,8 +77,13 @@ class Filedev():
             self.seqs[self.cols==3]=np.char.lower(self.seqs[self.cols==3])
 
     def exit(self):
+        self.outstream.flush()
+        if self.outstream.status() != QTextStream.Ok:
+            self.file.cancelWriting()
+            raise FileOperationError(self.file.fileName(), 'write', 'file', 'Unable to write the complete output file.')
         if self.file.isWritable():
-            self.file.close()
+            if not self.file.commit():
+                raise qt_file_error(self.file, 'commit')
         self.file=None
 
 class RTFdev(Filedev):
@@ -105,7 +116,7 @@ class RTFdev(Filedev):
     def graphics_init(self):
         if self.open_output_file():
             self.outstream << '{\\rtf1\\ansi\\deff0\n{\\fonttbl{\\f0\\fmodern Courier New;}}\n'
-            self.outstream << '{{\\info{{\\author BOXSHADE}}{{\\title {}}}}}\n'.format(self.Alignment)
+            self.outstream << '{{\\info{{\\author BOXSHADE}}{{\\title {}}}}}\n'.format(self.escape(self.Alignment))
             self.outstream << '{\\colortbl\n'
             for i in range(4):
                 self.outstream << '\\red{}\\green{}\\blue{};'.format(*self.rgb(self.fgds[i]))
@@ -128,10 +139,25 @@ class RTFdev(Filedev):
         self.outstream << '\n\\chshdng0\\chcbpat{0}\\cb{0}\\cf{1} '.format(5+colno, colno)
 
     def char_out(self,c):
-        self.outstream << c
+        self.outstream << self.escape(c)
 
     def string_out(self, str):
-        self.outstream << str
+        self.outstream << self.escape(str)
+
+    @staticmethod
+    def escape(text):
+        result = []
+        for char in text:
+            if char in '\\{}':
+                result.append('\\' + char)
+            elif ord(char) > 127:
+                encoded = char.encode('utf-16-le')
+                for offset in range(0, len(encoded), 2):
+                    code = int.from_bytes(encoded[offset:offset+2], 'little', signed=True)
+                    result.append(f'\\u{code}?')
+            else:
+                result.append(char)
+        return ''.join(result)
 
     def newline(self):
         self.outstream << '\n\\cb{}\\cf{} \\line'.format(9, 4)
@@ -184,14 +210,13 @@ class ImageDisp(QWidget):
 
 
     def createActions(self):
-        root = QFileInfo(__file__).absolutePath()
-        self.zoomInAct = QAction(QIcon(root + '/images/zoomin.png'),"Zoom In (33%)", self, shortcut="Ctrl++",
+        self.zoomInAct = QAction(QIcon(resource_path('zoomin.png')),"Zoom In (33%)", self, shortcut="Ctrl++",
                 enabled=False, triggered=self.zoomIn)
 
-        self.zoomOutAct = QAction(QIcon(root + '/images/zoomout.png'),"Zoom Out (33%)", self, shortcut="Ctrl+-",
+        self.zoomOutAct = QAction(QIcon(resource_path('zoomout.png')),"Zoom Out (33%)", self, shortcut="Ctrl+-",
                 enabled=False, triggered=self.zoomOut)
 
-        self.saveAct = QAction(QIcon(root + '/images/png.png'),"Save image", self, shortcut = "Ctrl+s",
+        self.saveAct = QAction(QIcon(resource_path('png.png')),"Save image", self, shortcut = "Ctrl+s",
                                enabled = False, triggered = self.savePNG)
 
     def zoomIn(self):
@@ -242,8 +267,11 @@ class ImageDisp(QWidget):
 
                 return False
             else:
-                self.imageLabel.pixmap().save(self.file, fmt)
-                return True
+                success = self.imageLabel.pixmap().save(self.file, fmt)
+                self.file.close()
+                if not success:
+                    QMessageBox.warning(self, 'Image export failed', 'Unable to encode or write the image.')
+                return success
         else:
             return False
 
@@ -280,12 +308,8 @@ class Paintdev(Filedev):
         self.bgds.append(QColor(255, 255, 255))
         self.dev_miny = self.top_mar
         self.dev_minx = self.left_mar
-        if system() == "Darwin":
-            self.dev_xsize = self.FSize * 0.8
-            self.dev_ysize = self.FSize
-        else:
-            self.dev_xsize = self.FSize * 0.9
-            self.dev_ysize = self.FSize * 1.2
+        self.dev_xsize = self.FSize
+        self.dev_ysize = self.FSize * 1.4
         self.lines_per_page = 10000
 
     def graphics_init(self):
@@ -293,9 +317,9 @@ class Paintdev(Filedev):
 # For this reason, I have moved gr_out.graphics_init() to the end of prep_out in the calling routine
 # as this "device" needs to know what it is drawing in order to initialise itself.
 #
-        blocks = (self.seqs.shape[1]//self.outlen)+1
+        blocks = (self.MW.consenslen + self.outlen - 1)//self.outlen
         canvas_height = int(self.top_mar+(self.dev_ysize*(blocks*(self.no_seqs+self.interlines)-self.interlines))+self.top_mar+0.5)
-        nchars = self.outlen
+        nchars = min(self.outlen, self.MW.consenslen)
         if self.snameflag:
             nchars += 1+len(self.seqnames[0])
         if self.LHsnumsflag:
@@ -303,16 +327,19 @@ class Paintdev(Filedev):
         if self.RHsnumsflag:
             nchars += 1+len(self.RHprenums[0][0])
         canvas_width = int(self.left_mar + (self.dev_xsize*(nchars))+self.left_mar+0.5)
+        if canvas_width > 32767 or canvas_height > 32767 or canvas_width*canvas_height > 100_000_000:
+            raise ValueError('Image is too large. Reduce font size or use paginated PDF export.')
         self.canvas = QPixmap(canvas_width,canvas_height)
         if self.canvas.isNull():
             return False
         self.canvas.fill(QColor(255,255,255))
 
-        BS.monofont.setPointSize(self.FSize)
-        BS.monofont.setWeight(QFont.Bold)
+        render_font = QFont(BS.monofont)
+        render_font.setPixelSize(self.FSize)
+        render_font.setWeight(QFont.Bold)
         self.pen = QPen()
         self.paint = QPainter(self.canvas)
-        self.paint.setFont(BS.monofont)
+        self.paint.setFont(render_font)
         self.paint.setRenderHint(QPainter.Antialiasing, True)
         self.paint.setRenderHint(QPainter.TextAntialiasing, True)
 
@@ -414,7 +441,7 @@ class PSdev(Filedev):
             self.save_sb = []
 
     def add_sb(self, ch):
-        self.save_sb.append(ch)
+        self.save_sb.append('\\' + ch if ch in '()\\' else ch)
         sl = len(self.save_sb)
         if (self.count+sl) > 200:
             xsl = 'S' if sl > 1 else 'C'
@@ -424,7 +451,7 @@ class PSdev(Filedev):
             self.save_sb = []
 
     def graphics_init(self):
-        nchars = self.outlen
+        nchars = min(self.outlen, self.seqs.shape[1])
         if self.snameflag:
             nchars += 1 + len(self.seqnames[0])
         if self.LHsnumsflag:
@@ -433,6 +460,8 @@ class PSdev(Filedev):
             nchars += 1 + len(self.RHprenums[0][0])
         line_length = self.dev_xsize * nchars
         if line_length > (self.dev_maxx-self.dev_minx):
+            if getattr(self, 'output_path', ''):
+                raise ValueError('PostScript line is too wide. Reduce residues per line or font size, or use PDF/SVG.')
             mb = QMessageBox()
             mb.setTextFormat(Qt.RichText)
             mb.setText("<p style='font-size: 18pt'>Picture too wide for page!</p>"

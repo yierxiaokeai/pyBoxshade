@@ -1,7 +1,5 @@
-#!/usr/bin/env python
-
-
-from PyQt5.QtCore import Qt, QSize, QSettings, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, pyqtSlot
+from pyboxshade.settings import new_settings as QSettings
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
         QGridLayout, QPushButton, QRadioButton, QColorDialog,
         QDialogButtonBox, QFrame, QGroupBox, QHeaderView, QLabel, QLineEdit,
@@ -302,7 +300,10 @@ class GeneralTab(QWidget):
             self.startstable.setItem(i,1,b)
 
     def exit(self):
-        if (self.LHseqnumbox.isChecked() or self.RHseqnumbox.isChecked()) and not self.defnumsbox.isChecked():  # wants numbers, but not the default
+        if len(self.consbox.text()) != 3:
+            QMessageBox.warning(self, "Invalid consensus symbols", "Enter exactly three consensus symbols.")
+            return False
+        if self.no_seqs and (self.LHseqnumbox.isChecked() or self.RHseqnumbox.isChecked()) and not self.defnumsbox.isChecked():
             if np.amax(self.startnums) == 1:
                 mb = QMessageBox(self)
                 mb.setTextFormat(Qt.RichText)
@@ -343,11 +344,11 @@ class GeneralTab(QWidget):
                 b = self.startstable.item(i,1).text()
                 try:
                     a=int(b)
-                except:
+                except ValueError:
                     a=1
                 self.startnums[i]=a
 
-        if self.scflag:
+        if self.scbox.isChecked():
             self.consensnum = 1+self.consnum.currentIndex()
         else:
             self.consensnum = 1

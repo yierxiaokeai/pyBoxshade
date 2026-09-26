@@ -1,0 +1,4 @@
+include LICENSE INSTALL.txt launch.ps1 build_windows.ps1 pyboxshade-modern.spec 使用说明.md
+recursive-include examples *.fasta
+recursive-include tests *.py
+recursive-include pyboxshade/assets *.png

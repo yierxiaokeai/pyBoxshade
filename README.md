@@ -1,58 +1,201 @@
-# pyBoxshade
-Desktop application for colouring/shading sequence alignments
+# pyBoxshade 2.0
 
-### Purpose
-pyBoxshade is a program for creating good-looking printouts from alignments of multiple protein or DNA sequences. The program does no alignment by itself, it takes as input a file already processed by a multiple alignment program or a multiple sequence editor. The program is an updated version of BOXSHADE, which I helped write, and which is no longer available on ExPasy servers (it is, as of this writing, available at http://arete.ibb.waw.pl/PL/html/boxshade.html). I have converted BOXSHADE from Pascal to Python/Qt, and it is available for Windows, Linux or MacOS.
-In the program output, identical and similar residues in the multiple alignment are represented by different colors of letters or shadings (colours of background). There are many options concerning the kind of shading to be applied, whether to include a ruler line, sequence numbering, a consensus line and so on. 
-The original program (BOXSHADE) simply reads in a sequence, processes it, then quits. pyBoxshade holds the sequence in memory until a new sequence is read in, or the user quits. Any number of different outputs can be done with the same sequence; the output can be viewed dynamically before a version is stored as a file.
+pyBoxshade 是用于多序列比对着色、预览和导出的桌面程序，支持蛋白质与核酸序列。输入为已经完成比对的序列文件，程序根据共识、相似残基组或指定参考序列进行着色。
 
-### Changes/upgrades
-Please contact me directly or via a bug report if you have any problems with the application, or if you wish to see additional functionality - if something seems worth doing, I am happy to consider it.
+本版本基于 [Michael Baron 的 pyBoxshade](https://github.com/mdbaron42/pyBoxshade) 升级，保留可配置的 BOXSHADE 着色方式，增加现代桌面工作区、矢量导出和命令行导出。项目采用 [GPL-3.0](LICENSE) 许可证。
 
-### Input formats
-pyBoxshade supports a number of different input formats; it uses the BioPython library for reading aligment files, and can therefore read most of the formats supported by that library. Currently this includes Clustal format (.aln), FASTA format, Phylip format (interleaved or sequential), MSF, nexus and stockholm formats. The program attempts to determine the file type, so it should handle all of these transparently.<br>
+## 功能
 
-### Output formats
-pyBoxshade provides four types of output, those I thought would be of most use:
-1. PS (PostScript) files for printing directly or further conversion. I have good success opening these files and converting to PDF, tiff or other formats with Preview (on Mac), IrfanView (Windows) or GIMP (either platform). 
-2. RTF (Rich Text Format) for export to various word-processing and graphics programs (seems to work in TextEdit (Mac OS), Microsoft Word or OpenOffice).
-3. PNG (Portable Network Graphics). This format can first be viewed on screen, then saved as an image file. It is a pixel-based image format (similar to TIFF or JPEG), so is not suitable for enlarging or where high resolution images are required. In the latter case it is possible to make a larger image using a large font and shrink this image down to the required size.
-4. ASCII output showing either the conserved residues or the varying ones (others as '-').
+- 实时着色预览、源码标签页、最近打开文件，以及拖放打开。
+- 快速调整序列类型、保守性阈值、每行残基数、共识行和位置标尺。
+- 在完整设置中配置颜色、相似残基、残基分组、参考序列及序列编号。
+- 缩放、平移、适配窗口和原始比例显示。
+- 导出 SVG、分页 PDF、PNG、RTF、PostScript 和参考序列比较文本。
+- 命令行导出，适合脚本调用和批量处理。
+- 支持高 DPI 显示及 Windows 中文安装路径。
+- 简体中文与英文界面，可即时切换并自动保存语言选择。
 
-### Shading strategy (similarity to consensus or single sequence)
-The shading algorithm used by BOXSHADE (and hence by pyBoxshade) is completely configurable by the user, and is not based on any specific mutational table. Firstly, in order for there to be a consensus of any kind at a position, a threshold fraction of the sequences must agree. This threshold fraction can be any number between 0 and 1. The number of sequences that must agree for there to be a consensus is, as you might expect, this fraction times the total number of sequences in the alignment, rounded to the nearest whole number.
-An additional option for this kind of consensus is to apply a different colouring/shading where all sequences have the same residue (globally conserved).
+## 输入与输出
 
-If an identity-type consensus is found, and similarity shading is in operation, the program looks to see if the remaining residues at that position are similar to the consensus residue. The amino acids that are to be considered similar to the consensus residue are defined in the 'Sims' dialog. In this dialog,
-S | TA   |
-means that both T and A are considered similar to S, where there is a conserved S residue in more than threshold number of sequences. However, it does NOT mean that T and A are similar to each other. This would have to be specified in the A or T box.
+### 输入文件
 
-If there is no identity-type consensus, the program looks for a 'consensus by similarity'; this tries to take account of the situations where most of the sequences may have (for example) R or K at a position, but neither at a high enough level to pass the threshold fraction. If there is not a single residue that is conserved (greater than the threshold) at a position, the program looks for a 'group' of amino acids that fulfills the requirements. 'Groups' are defined in the 'Grps' dialog. Users can tailor these to their personal prejudices, or base them on their favourite mutational frequency table. Any amino acid not listed is assumed not to be in a group. All members of a group are considered to be mutually similar, unlike the Sims, described above. If consensus by similarity is found, all the residues in the consensus group are shaded using the 'similar' shading defined by the user. If the user does not select 'shading by similarity', only the identity-type consensus is displayed.
+支持 FASTA、Clustal、PHYLIP（常规、relaxed 和 sequential）、MSF、Nexus、Stockholm。
 
-Note that cases where two residues, or groups of residues, fulfill the threshold requirements (as could happen with values of the threshold fraction less than or equal to 50%) are treated as having no consensus.
-As an alternative to a calculated consensus based on all the sequences in the alignment, the user can choose a ‘master sequence'. In this case the user specifies one of the sequences of the alignment and that sequence is taken to be the 'consensus'. Only those residues become shaded that are identical or similar to the chosen sequence. Output obtained with this option tends to be less shaded and neglects similarities between the other (non-chosen) sequences.
+输入要求：
 
-### Consensus display
-pyBoxshade offers the possibility to create an additional line holding a consensus symbol. The way this consensus line is displayed is controlled by specifying a string of exactly three symbols, in the 'chars to print consensus' box in the layout preferences dialog. As these symbols are not immediately intuitive, a brief explanation is necessary:
- 
-+ the first symbol is used for positions where there is no similar/identical relationship.
-+ the second symbol is used for positions where a residue or group is identical, similar or a mixture of identical and similar, in greater than the threshold number of sequences of the alignment.
-+ the third symbol represents positions that are identical in all sequences of the alignment.
+- 至少包含两条序列，各序列的比对长度相同。
+- 文件使用 UTF-8 编码，可带 BOM。
+- 残基使用英文字母；支持 `-`、`.`、`~` 缺口符号。
+- 比对中至少有一个残基。
 
-For example, a parameter string " .\*" (blank/point/asterisk) means: label all positions in the alignment with totally identical residues by an asterisk (\*), all positions with greater than the threshold conserved residues by a point (.) and do not mark the other positions.
-Besides points, asterisks and other symbols, there are three letters that act as special characters when they appear in the string: 'B' 'L' and 'U'. A 'B' can be used to mean a blank, an 'L' means that a lowercase representation of the most abundant residue at that position is to be used instead of a fixed consensus symbol while a 'U' means an uppercase character representation of that residue. A possible application would be the string BLU where conserved residues are represented by lowercase characters and identical by uppercase characters.
+项目提供人工示例 [examples/demo.fasta](examples/demo.fasta)，用于检查启动与导出。
 
-### Sequence numbering
-There is the possibility to add numbering to the output files. The numbers are printed between the sequence names and the sequence itself on the left hand side, or at the right hand side, or both, or neither. Since most of the input files either use no numbering or number the first position in the alignment always with a "1" (and that does not necessarily reflect the numbers within the original sequence), the user can specify the starting number for each sequence (the default is that all sequences start at 1). 
-pyBoxshade starts with the value entered for the first position and continues numbering every valid symbol, skipping blanks, '-','.' and ‘~’. If the user sets a negative start number, numbering passes straight from -1 to 1: there is no zeroth position.
-Sequence numbering starts from the first residue. For sequences that do not start at the beginning of the alignment, or finish well before the end (i.e. are padded extensively at the left or right end of the alignment), numbering starts on the first line one which that sequence has a residue, and stops on the line that has the last residue of that sequence. At least, that is what it is supposed to do! Let me know if it doesn’t work for your alignment.
+### 输出文件
 
-### Marker line 
-pyBoxshade has the ability to print a marker or ruler line over the sequence alignment. This looks like this:
-     `....:...10....:...20....:...30....:...40....:...50....:...60`<br>
-     `AAAAACCCCCAAAAACCCCCGGGGGTTTTTGGGGGTTTTTCCCCCTTTTTGGGGGAAAAA`
+| 格式 | 用途与说明 |
+| --- | --- |
+| SVG | 矢量图，保留文字与着色，适合后续排版和编辑 |
+| PDF | 矢量文档，长比对自动分页 |
+| PNG | 像素图片，适合直接查看和插入文档 |
+| RTF | 带着色的富文本，可用于文字处理软件 |
+| PS | PostScript，沿用原版字体与页面宽度约束 |
+| TXT | 与指定参考序列比较的文本，需要选择参考序列 |
 
-Numbers are right aligned with the residue in question.
+导出采用原子写入，写入失败时保留已有目标文件。Unicode 序列名称建议使用 SVG、PDF 或 RTF。
 
-## Binaries
-Binaries are available for MacOS (tested on 10.13, 10.14 and 11 (Big Sur), MacOSX_Sierra (tested on 10.12 and 10.13), Windows (tested on Windows10) and linux (tested on Ubuntu18); the binaries can be found in the Releases section of this project. Note that, due to the way python applications are packaged, the Windows and linux binaries take a few seconds to start. Not all functions have been tested on all platforms, but the applications startup and open windows, load alignment files and create all the output file types. Please provide feedback on any problems, especially in Windows and linux versions.
+## 安装与启动
+
+需要 Python 3.10 或更高版本。依赖由 [pyproject.toml](pyproject.toml) 管理：
+
+| 依赖 | 版本范围 |
+| --- | --- |
+| PyQt5 | `>=5.15.11,<6` |
+| Biopython | `>=1.85,<2` |
+| NumPy | `>=1.26,<3` |
+
+以下命令均在项目根目录执行。
+
+### Windows
+
+使用 PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pyboxshade
+```
+
+安装完成后，也可以使用 PowerShell 7 执行启动脚本：
+
+```powershell
+pwsh -File .\launch.ps1
+```
+
+如已在本机构建 Windows 程序，可直接打开 `dist\pyBoxshade\pyBoxshade.exe`。移动程序时保留整个 `dist\pyBoxshade` 文件夹。
+
+### Linux / macOS
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m pyboxshade
+```
+
+图形界面需要可用的桌面环境和 Qt 系统依赖。Linux 的自动测试环境依赖安装步骤见 [.github/workflows/tests.yml](.github/workflows/tests.yml)。
+
+原启动入口 `python BS_app.py` 也可打开当前桌面工作区。
+
+## 图形界面使用
+
+首次启动默认使用简体中文。在 **语言 / Language** 菜单中选择 **简体中文** 或 **English**，界面即时切换，后续启动沿用该选择。菜单、工具栏、全部设置页及常用提示均提供中文。输入解析失败、编码不正确、路径不存在、权限不足、文件占用和空间不足等常见错误显示中文原因及处理建议；弹窗中的 **显示详细信息** 可展开原始诊断。未识别的第三方错误提供中文概括及完整原始详情。语言切换保留序列名称、比对内容、着色参数和导出内容。
+
+也可通过启动参数指定语言：
+
+```powershell
+.\.venv\Scripts\python.exe -m pyboxshade --language zh_CN
+.\.venv\Scripts\python.exe -m pyboxshade --language en
+# 打包程序同样支持
+.\dist\pyBoxshade\pyBoxshade.exe --language zh_CN
+```
+
+1. 点击 **打开比对文件 / Open alignment**，或将比对文件拖入窗口。
+2. 在左侧选择 **蛋白质 / Protein** 或 **DNA / RNA**，设置 **共识阈值 / Threshold** 与 **每行位点数 / Residues / line**。
+3. 勾选 **共识序列行 / Consensus line** 和 **位置标尺 / Position ruler**。
+4. 点击 **全部设置 / All settings** 配置颜色、分组、参考序列和编号。
+5. 按住 Ctrl 滚动鼠标滚轮缩放，拖动预览平移；**适应窗口 / Fit** 适配窗口，**100%** 恢复原始比例。
+6. 在 **导出 / Export** 菜单中选择导出格式。
+
+共识与相似性结果取决于阈值、缺口计数、相似残基配置和参考序列选择。桌面设置沿用 `Boxshade/Boxshade` 命名空间，并保存最近文件及窗口状态。
+
+更详细的中文操作说明见 [使用说明.md](使用说明.md)，原项目的完整功能文档见 [pyBoxshadeDocs.pdf](pyBoxshadeDocs.pdf)。
+
+## 命令行导出
+
+Windows 示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m pyboxshade examples\demo.fasta --export alignment.svg
+.\.venv\Scripts\python.exe -m pyboxshade examples\demo.fasta --export alignment.pdf --threshold 0.7 --line-width 60
+.\.venv\Scripts\python.exe -m pyboxshade examples\demo.fasta --export comparison.txt --reference 1
+```
+
+Linux / macOS 使用 `.venv/bin/python`，并将路径分隔符写为 `/`。
+
+| 参数 | 说明 |
+| --- | --- |
+| `alignment` | 输入比对文件；图形界面启动时可省略 |
+| `--export PATH` | 导出后退出，根据扩展名选择 SVG、PDF、PNG、RTF、PS 或 TXT |
+| `--threshold FLOAT` | 保守性阈值，范围 0–1 |
+| `--line-width INT` | 每行残基数，范围 10–250 |
+| `--dna` | 使用核酸模式 |
+| `--reference INT` | 参考序列编号，从 1 开始；TXT 导出需要此参数 |
+| `--language zh_CN/en` | 指定并保存图形界面语言；与 `--export` 同用时不修改桌面语言偏好 |
+| `--version` | 显示版本 |
+| `--help` | 显示帮助 |
+
+命令行导出使用隔离的默认设置及传入参数，保留桌面偏好。默认阈值为 0.7，每行 60 个残基。成功返回退出码 `0`，输入或导出失败返回 `2`。
+
+批量导出附加 `--language zh_CN` 可输出中文错误原因，同时保留原始技术详情；未指定语言时沿用英文命令行提示。读取失败时保留当前界面已有比对，写入失败时保留已有目标文件。格式异常、文件被占用或权限不足仍需按提示修正输入或保存位置。
+
+需要保留生成文件时，建议将它们放在 `artifacts/` 中，该目录已配置 Git 忽略。
+
+## 开发与测试
+
+Windows：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m build
+```
+
+开发依赖包括 pytest、build、wheel、PyInstaller 和 pypdf。
+
+已在 Windows、Python 3.12 环境完成 60 项测试，覆盖输入格式、着色、缺口列、参考序列、编号、界面状态、中英文切换与保存、设置窗口翻译、语言切换后的数据和导出一致性、六种导出和失败保护。错误处理测试包括六种格式的损坏输入、解析器异常、文件权限和空间错误、非 UTF-8 编码、弹窗原始诊断以及中文命令行错误。Windows 打包程序已实际完成六种导出，并检查 PDF 文字、SVG 结构及 PNG 解码。
+
+CI 配置覆盖 Windows / Linux 与 Python 3.10、3.12、3.13；远程 CI 及其他操作系统的实际结果尚待验证。
+
+## Windows 打包
+
+先安装开发依赖，然后使用 PowerShell 7：
+
+```powershell
+pwsh -File .\build_windows.ps1
+```
+
+输出目录为 `dist/pyBoxshade/`，其中包含程序、运行依赖、许可证、说明文档及示例文件。手写配置 [pyboxshade-modern.spec](pyboxshade-modern.spec) 包含中文安装路径兼容处理，应随源码提交。
+
+Python 分发包通过 `python -m build` 生成，输出 wheel 和源码压缩包到 `dist/`。
+
+## 仓库文件
+
+| 路径 | 内容 |
+| --- | --- |
+| `pyboxshade/` | 桌面工作区、输入读取、导出、启动和资源处理 |
+| `pyboxshade/assets/` | 程序运行需要的图标 |
+| `BS_app.py`、`BS_config.py` | 原项目的着色、布局与共享配置 |
+| `OutDevs.py`、`mydialog.py` | 输出设备与完整设置界面 |
+| `tests/` | 自动测试 |
+| `examples/` | 人工示例比对 |
+| `.github/workflows/` | CI 配置 |
+| `images/`、`pyBoxshadeDocs.pdf` | 原项目保留的资源与文档 |
+
+[.gitignore](.gitignore) 排除虚拟环境、缓存、构建目录、安装元数据、临时导出、本机验证报告及本地环境配置。源码、测试、示例、运行资源和手写打包配置保留在版本管理范围内。
+
+本地生成的 `build/`、`dist/` 和 `artifacts/` 内容可按需保留在磁盘中。需要分发程序时，可将构建产物作为发布附件提供。
+
+## 运行边界
+
+- 输入须已完成多序列比对。
+- 解析、着色和渲染在界面线程中进行，大型比对处理期间界面可能等待。
+- PNG 与预览的宽高上限为 32767 像素，总像素上限为一亿。
+- SVG 高度上限为 32767 单位；较长的比对适合分页 PDF。
+- PostScript 有字体及页面宽度限制。
+- 目前已完成当前 Windows 环境验证，Linux 和 macOS 尚未完成实际运行验收。
+
+## 来源与许可证
+
+原项目：[mdbaron42/pyBoxshade](https://github.com/mdbaron42/pyBoxshade)。
+
+本版本遵循 [GPL-3.0](LICENSE)。分发修改后的程序时，应按许可证提供对应源码并保留许可信息。

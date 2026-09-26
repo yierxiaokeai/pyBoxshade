@@ -1,11 +1,9 @@
-#!/usr/bin/env python
-
+import sys
 from itertools import chain
 from platform import system
 
 import numpy as np
-from Bio import AlignIO
-from PyQt5.QtCore import QFile, QFileInfo, QPoint, QSettings, QSize, Qt, QTextStream, QDir
+from PyQt5.QtCore import QFileInfo, QPoint, QSize, Qt, QDir
 from PyQt5.QtGui import QIcon, QKeySequence, QFont, QColor, QPixmap
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QTextEdit,
                              QStyleFactory, QWidget)
@@ -13,6 +11,9 @@ from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QMainWindow, QM
 import BS_config as BS
 from OutDevs import RTFdev, PSdev, ASCIIdev, Paintdev, ImageDisp
 from mydialog import prefsDialog
+from pyboxshade.alignment import read_alignment
+from pyboxshade.resources import resource_path
+from pyboxshade.settings import new_settings as QSettings
 
 # some global varibles and strings
 
@@ -24,8 +25,8 @@ aasetlow = 'abcdefghijklmnopqrstuvwxyz'
 chars = aaset+aasetlow
 gapchars = '-.~'
 
-aa_dict = dict(zip(list(aaset), range(1,lenaa+1)))
-aalow_dict = dict(zip(list(aasetlow), range(1,len(aasetlow)+1)))
+aa_dict = dict(zip(list(aaset), range(lenaa)))
+aalow_dict = dict(zip(list(aasetlow), range(len(aasetlow))))
 
 simtable = np.full((lenaa,lenaa), False, dtype=bool)
 for i in range(lenaa):
@@ -33,17 +34,17 @@ for i in range(lenaa):
 grptable = np.copy(simtable)
 
 def sim(a, b):
-    p1 = aa_dict[a] if a in aa_dict else False
-    p2 = aa_dict[b] if b in aa_dict else False
-    if p1 and p2:
+    p1 = aa_dict.get(a)
+    p2 = aa_dict.get(b)
+    if p1 is not None and p2 is not None:
         return simtable[p1, p2]
     else:
         return False
 
 def grp(a, b):
-    p1 = aa_dict[a] if a in aa_dict else False
-    p2 = aa_dict[b] if b in aa_dict else False
-    if p1 and p2:
+    p1 = aa_dict.get(a)
+    p2 = aa_dict.get(b)
+    if p1 is not None and p2 is not None:
         return grptable[p1, p2]
     else:
         return False
@@ -65,21 +66,21 @@ def readsims():
         simtable[i, i] = True
     grptable = np.copy(simtable)
     for i in range(1,len(simsline)-1):
-        p1=aa_dict[simsline[i][0]] if simsline[i][0] in aa_dict else False
-        if p1:
+        p1 = aa_dict.get(simsline[i][0])
+        if p1 is not None:
             for j in range (2,len(simsline[i])):
-                p2 = aa_dict[simsline[i][j]] if simsline[i][j] in aa_dict else False
-                if p2 :
+                p2 = aa_dict.get(simsline[i][j])
+                if p2 is not None:
                     simtable[p1,p2] = True
                     simtable[p2,p1] = True
 
     for k in range(1,len(grpsline)-1):
         for j in range(0, len(grpsline[k])-1):
-            p1 = aa_dict[grpsline[k][j]] if grpsline[k][j] in aa_dict else False
-            if p1 :
+            p1 = aa_dict.get(grpsline[k][j])
+            if p1 is not None:
                 for i in range (j+1, len(grpsline[k])):
-                    p2 = aa_dict[grpsline[k][i]] if grpsline[k][i] in aa_dict else False
-                    if p2 :
+                    p2 = aa_dict.get(grpsline[k][i])
+                    if p2 is not None:
                         grptable[p1, p2] = True
                         grptable[p2, p1] = True
     return
@@ -234,7 +235,7 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def do_prefs(self):
-        Preferences = prefsDialog(self.no_seqs, self.consensnum)
+        Preferences = prefsDialog(self.no_seqs, self.consensnum, parent=self)
         Preferences.GenTab.startnums = self.startnums
         Preferences.GenTab.filltable() # I have made the preferences startnums array a view onto the one here
                                         # and use it to fill the table
@@ -253,36 +254,25 @@ class MainWindow(QMainWindow):
                 "protein or DNA alignments with residues coloured and shaded "
                 "according to the level of sequence conservation </p>")
 
-# The following code checks whether we are running from code or from a bundle
-# prepared by Pyinstaller, and sets the root directory accordingly to access
-# the images directory.
-        if getattr(sys, 'frozen', False):
-            root = getattr(sys, '_MEIPASS', '')
-        else:
-            root = QFileInfo(__file__).absolutePath()
-        ab.setIconPixmap(QPixmap(root + '/images/image2.png').scaled(80,80))
+        ab.setIconPixmap(QPixmap(resource_path('image2.png')).scaled(80,80))
 
         ab.exec()
 
     def createActions(self):
-        if getattr(sys, 'frozen', False):
-            root =  getattr(sys, '_MEIPASS', '')
-        else:
-            root = QFileInfo(__file__).absolutePath()
-        self.openAct = QAction(QIcon(root + '/images/open.png'), "&Open...",
+        self.openAct = QAction(QIcon(resource_path('open.png')), "&Open...",
                         self, shortcut=QKeySequence.Open, statusTip="Open an existing file", triggered=self.open)
         self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q",
                 statusTip="Exit the application", triggered=self.close)
-        self.doPrefsAct = QAction(QIcon(root + '/images/prefs.png'), "Settings", self,
+        self.doPrefsAct = QAction(QIcon(resource_path('prefs.png')), "Settings", self,
                 statusTip="Open dialog to allow control of program settings",
                 triggered=self.do_prefs)
-        self.RTFAct = QAction(QIcon(root + '/images/rtf.png'), "Make RTF", self,
+        self.RTFAct = QAction(QIcon(resource_path('rtf.png')), "Make RTF", self,
                 statusTip="Make RTF file", triggered=self.RTF_out)
-        self.PSAct = QAction(QIcon(root + '/images/ps-file.png'), "Make PS", self,
+        self.PSAct = QAction(QIcon(resource_path('ps-file.png')), "Make PS", self,
                               statusTip="Make PS file", triggered=self.PS_out)
-        self.AscAct = QAction(QIcon(root + '/images/txt.png'), "Make Text", self,
+        self.AscAct = QAction(QIcon(resource_path('txt.png')), "Make Text", self,
                              statusTip="Make text file", triggered=self.ASCII_out)
-        self.PaintAct = QAction(QIcon(root + '/images/image.png'), "Show image", self,
+        self.PaintAct = QAction(QIcon(resource_path('image.png')), "Show image", self,
                               statusTip="Show image in window", triggered=self.image_out)
         self.aboutAct = QAction("&About", self,
                 statusTip="Show the application's About box", triggered=self.about)
@@ -330,7 +320,7 @@ class MainWindow(QMainWindow):
         settings = QSettings("Boxshade", "Boxshade")
         settings.setFallbacksEnabled(False)
         pos = settings.value("pos", QPoint(200, 200))
-        size = settings.value("size", QSize(400, 400))
+        size = settings.value("size", QSize(1100, 760))
         self.resize(size)
         self.move(pos)
 
@@ -339,103 +329,38 @@ class MainWindow(QMainWindow):
         settings.setValue("pos", self.pos())
         settings.setValue("size", self.size())
 
-    def read_seq(self, fileName, seq_format):
-        with open (fileName, mode='r', encoding='utf-8') as f:
-            try:
-                self.al = AlignIO.read(f, seq_format)
-            except ValueError:
-                QApplication.restoreOverrideCursor()
-                mb=QMessageBox(self)
-                mb.setTextFormat(Qt.RichText)
-                mb.setText("<p style='font-size: 18pt'>Alignment format error</p>"
-                "<p style='font-size: 14pt; font-weight: normal'> Unable to extract sequences from that file - possibly a problem with the formatting of the alignment file.</p>")
-                mb.setIcon(QMessageBox.Warning)
-                mb.exec()
-                return False
-            return True
-
-
     def open(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open alignment file", BS.lastdir, file_filter, options=options)
+        title = self.interface.text("Open alignment file") if hasattr(self, "interface") else "Open alignment file"
+        fileName, _ = QFileDialog.getOpenFileName(self, title, BS.lastdir, file_filter, options=options)
         if fileName:
             self.loadFile(fileName)
             BS.lastdir = QFileInfo(fileName).absolutePath()
 
     def loadFile(self, fileName):
-        file = QFile(fileName)
-        if not file.open(QFile.ReadOnly):
-            mb = QMessageBox(self)
-            mb.setTextFormat(Qt.RichText)
-            mb.setText("<p style='font-size: 18pt'>File opening error</p>"
-                "<p style='font-size: 14pt; font-weight: normal'> Unable to open file <i>{}</i>.<br><br>File error was: \"{}\".</p>".format(fileName, file.errorString()))
-            mb.setIcon(QMessageBox.Warning)
-            mb.exec()
-            return
-
-        inf = QTextStream(file)
-        inf.setCodec("UTF-8")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        QApplication.processEvents()
-        Line1=inf.readLine()
-        if Line1.startswith(">"):
-            readOK=self.read_seq(fileName, "fasta")
-        elif Line1.upper().startswith("CLUSTAL"):
-            readOK=self.read_seq(fileName, "clustal")
-        elif Line1.upper().startswith("#NEXUS"):
-            readOK=self.read_seq(fileName, "nexus")
-        elif Line1.upper().find("STOCKHOLM") > -1:
-            readOK=self.read_seq(fileName, "stockholm")
-        elif Line1.upper().find("MULTIPLE_ALIGNMENT") > -1 or Line1.upper().find("PILEUP") > -1:
-            readOK=self.read_seq(fileName, "msf")
-        elif len([int(i) for i in Line1.split() if i.isdigit()]) == 2:
-            readOK=self.read_seq(fileName, "phylip-relaxed")
-        else:
-            QApplication.restoreOverrideCursor()
-            mb = QMessageBox(self)
-            mb.setTextFormat(Qt.RichText)
-            mb.setText("<p style='font-size: 18pt'>Alignment file error</p>"
-                "<p style='font-size: 14pt; font-weight: normal'> Sorry, I don't recognise the format of file:<br><i>{}</i></p>".format(fileName))
-            mb.setIcon(QMessageBox.Warning)
-            mb.exec()
-            file.close()
-            return
-        if not readOK: # If there was an error in read_seq, the cursor has already been reset
-            file.close()
-            return
-
-        self.seqs = np.array([list(rec.upper()) for rec in self.al], str, order="F")
-        self.seqnames = [rec.id for rec in self.al]
-        self.al = []
+        try:
+            data = read_alignment(fileName)
+        except (OSError, UnicodeError, ValueError) as error:
+            if hasattr(self, "interface"):
+                self.interface.show_error("Unable to open alignment", error)
+            else:
+                QMessageBox.warning(self, "Unable to open alignment", str(error))
+            return False
+        self.seqs = np.array([list(seq) for seq in data.sequences], str, order="F")
+        self.seqnames = list(data.names)
+        self.consensnum = 1
 # release the memory used by the BioPython construct, not needed now.
 # now that I know how big an alignment I have, I redefine the space taken up by the various arrays
         self.no_seqs = self.seqs.shape[0]
         self.maxseqlen = self.seqs.shape[1]
-        mbflag=False
-        if self.no_seqs*self.maxseqlen >50000:
-            mb = QMessageBox(self)
-            mb.setAttribute(Qt.WA_DeleteOnClose)
-            mb.setTextFormat(Qt.RichText)
-            mb.setText("<p style='font-size: 18pt'>Large file warning</p>"
-                       "<p style='font-size: 14pt; font-weight: normal'> OK, that's a big alignment!<br>"
-                       "Be aware that processing the alignment and preparing images/files will take more than a few seconds \U0001F609.<br>"
-                       "Working.....</p>")
-            mb.setIcon(QMessageBox.Information)
-            mb.setStandardButtons(QMessageBox.NoButton)
-            mb.setWindowModality(Qt.NonModal)
-            mbflag=True
-            mb.show()
-            app.processEvents()
         if system() == "Darwin":
             BS.monofont.setPointSize(14)
         else:
             BS.monofont.setPointSize(12)
         BS.monofont.setWeight(QFont.Normal)
         self.textEdit.setFont(BS.monofont)
-        inf.seek(0)
-        self.textEdit.setPlainText(inf.readAll())
-        file.close()
+        self.textEdit.setPlainText(data.text)
         self.cols = np.full(self.seqs.shape, 0, dtype=np.int32)
         self.cons = np.full(self.maxseqlen, ' ', dtype=str)
         self.conschar = np.copy(self.cons)
@@ -446,18 +371,14 @@ class MainWindow(QMainWindow):
 #spaces, etc. at the "far" end. May be a problem here for some strange cases
         self.consenslen = 0
         for i in range(0,self.no_seqs):
-            while self.seqlens[i] and (self.seqs[i, self.seqlens[i] - 1] in [' ', '-', '.']):
+            while self.seqlens[i] and (self.seqs[i, self.seqlens[i] - 1] in gapchars):
                 self.seqlens[i] -= 1
             if self.seqlens[i] > self.consenslen:
                 self.consenslen = self.seqlens[i]
         self.setCurrentFile(fileName)
-        QApplication.restoreOverrideCursor()
         self.process_seqs()
-
-        if mbflag:
-            mb.done(1)
         self.statusBar().showMessage("File loaded", 2000)
-        return # from load_file
+        return True
 
     def make_consensus(self):
         settings = QSettings("Boxshade", "Boxshade")
@@ -473,6 +394,9 @@ class MainWindow(QMainWindow):
             for i in range(0, self.consenslen):
                 x = self.seqs[:, i]
                 xx=np.char.isalpha(x)
+                self.cons[i] = ' '
+                if not np.any(xx):
+                    continue
                 if not countGaps:
                     thr = round(thrfrac*np.sum(xx))
                 idcount = np.sum(x == x[xx,None], 0)
@@ -525,6 +449,9 @@ class MainWindow(QMainWindow):
         for i in range(0, self.consenslen):
             idcount = 0
             simcount = 0
+            if not np.any(np.char.isalpha(self.seqs[:, i])):
+                self.conschar[i] = ' '
+                continue
             aasetflag = self.cons[i] in aaset
             if not countGaps:
                 seqcount=np.sum(np.char.isalpha(self.seqs[:, i]))
@@ -595,10 +522,11 @@ class MainWindow(QMainWindow):
         if self.no_seqs < 2:
             return
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        app.processEvents()
-        self.make_consensus()
-        self.make_colours()
-        QApplication.restoreOverrideCursor()
+        try:
+            self.make_consensus()
+            self.make_colours()
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def prep_out(self, gr_out):
         settings = QSettings("Boxshade", "Boxshade")
@@ -615,7 +543,6 @@ class MainWindow(QMainWindow):
         self.rulerflag = settings.value("rulerflag", type=bool)
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        app.processEvents()
         sname_just = max((self.consflag*9), max(map(len, self.seqnames)))
         nseqs = self.no_seqs
         if self.consflag:
@@ -657,24 +584,28 @@ class MainWindow(QMainWindow):
             gr_out.startnums = np.full(nseqs, 0, dtype=np.int64)
             if self.rulerflag:
                 gr_out.startnums[0] = 1
-            np.copyto(gr_out.startnums[self.rulerflag:self.rulerflag + self.no_seqs], self.startnums)
+            np.copyto(gr_out.startnums[self.rulerflag:self.rulerflag + self.no_seqs],
+                      np.ones_like(self.startnums) if self.defnumsflag else self.startnums)
             if self.consflag:
                 gr_out.startnums[nseqs - 1] = 1
-            nblocks = (self.consenslen//self.outlen)+1
+            nblocks = (self.consenslen + self.outlen - 1)//self.outlen
             gr_out.LHprenums = [['' for i in range(nblocks)] for j in range(nseqs)]
             gr_out.RHprenums = [['' for i in range(nblocks)] for j in range(nseqs)]
-            numlen = len(str(np.amax(self.startnums)+self.consenslen))
+            numlen = max(len(str(int(number)+offset)) for number in gr_out.startnums
+                         for offset in (0, self.consenslen+1))
             if self.rulerflag:
                 gr_out.LHprenums[0] = [' ' * numlen for x in gr_out.LHprenums[0]]
                 gr_out.RHprenums[0] = [' ' * numlen for x in gr_out.RHprenums[0]]
             for i in range(self.rulerflag, nseqs-self.consflag):
-                totcount=gr_out.startnums[i]
+                totcount = int(gr_out.startnums[i])
+                if totcount == 0:
+                    totcount = 1
                 bn = 0
                 thisline = 0
                 for j in range(0, self.consenslen):
                     if gr_out.seqs[i,j] in chars:
                         thisline +=1
-                    if ((j+1) % self.outlen == 0) or ((j==self.consenslen-1) and (bn == nblocks-1)): # end of a line or last block
+                    if ((j+1) % self.outlen == 0) or j == self.consenslen-1:
                         if (totcount == gr_out.startnums[i]) and (thisline == 0): # no chars yet
                             gr_out.LHprenums[i][bn] = ' ' * numlen
                             gr_out.RHprenums[i][bn] = ' ' * numlen
@@ -683,8 +614,13 @@ class MainWindow(QMainWindow):
                             gr_out.RHprenums[i][bn] = ' ' * numlen
                         else:
                             gr_out.LHprenums[i][bn] = str(totcount).rjust(numlen)
-                            totcount += thisline
-                            gr_out.RHprenums[i][bn] = str(totcount-1).rjust(numlen)
+                            last = totcount + thisline - 1
+                            if totcount < 0 and last >= 0:
+                                last += 1
+                            gr_out.RHprenums[i][bn] = str(last).rjust(numlen)
+                            totcount = last + 1
+                            if totcount == 0:
+                                totcount = 1
                         bn += 1
                         thisline = 0
             if self.consflag:
@@ -720,12 +656,14 @@ class MainWindow(QMainWindow):
                     gr_out.set_colour(4)
                     gr_out.string_out(' '+gr_out.RHprenums[j][i])
                 lcount +=1
-                if lcount >= gr_out.lines_per_page:
+                if lcount >= gr_out.lines_per_page and ll > lcount:
                     ll -= lcount
                     lcount = 0
                     gr_out.newpage()
                 else:
                     gr_out.newline()
+            if i == nblocks - 1:
+                break
             if (lcount + gr_out.no_seqs + self.interlines) <= gr_out.lines_per_page:
                 for j in range(self.interlines):
                     gr_out.newline()
@@ -766,7 +704,7 @@ class MainWindow(QMainWindow):
         self.interlines = settings.value("interlines", type=int)
 
         gr_out = Paintdev(self)
-        blocks = self.maxseqlen //self.outlen +1
+        blocks = (self.consenslen + self.outlen - 1)//self.outlen
         nlines = self.no_seqs+self.consflag +self.rulerflag+self.interlines
         height = int(gr_out.top_mar + (gr_out.dev_ysize*((blocks*nlines)-self.interlines))+gr_out.top_mar+0.5)
         if height > 32768:
@@ -827,14 +765,5 @@ class MainWindow(QMainWindow):
 
 if __name__ == '__main__':
 
-    import sys
-#    import os
-#    getattr(sys, '_MEIPASS', '')
-#    os.environ["QT_MAC_WANTS_LAYER"] = "1"
-
-    set_defaults() # this returns immediately if the Preferences file already exists
-    app = QApplication(sys.argv)
-
-    mainWin = MainWindow()
-    mainWin.show()
-    sys.exit(app.exec_())
+    from pyboxshade.cli import main
+    sys.exit(main())
